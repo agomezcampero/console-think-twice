@@ -10,14 +10,14 @@ costs you a keystroke instead of a database.
 >> User.first.destroy!
 
 This will permanently destroy User #1 in production.
-Cascades to: sessions, company_memberships, comments, api_keys
+Cascades to: sessions, comments
 Confirm? (y/N) n
 ConsoleThinkTwice::Aborted: Aborted. Nothing was destroyed.
 
 >> User.destroy_all
 
 This will permanently destroy 200 Users in production.
-Cascades to: sessions, company_memberships, comments, api_keys
+Cascades to: sessions, comments
 Confirm? (y/N) y
 => [#<User id: 1, ...>, ...]
 
