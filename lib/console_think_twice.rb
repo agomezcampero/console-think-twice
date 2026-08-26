@@ -7,6 +7,7 @@ require_relative "console_think_twice/version"
 require_relative "console_think_twice/configuration"
 require_relative "console_think_twice/record_guard"
 require_relative "console_think_twice/relation_guard"
+require_relative "console_think_twice/collection_guard"
 
 # Confirmation prompts for destructive Active Record calls typed into a console.
 #
@@ -24,6 +25,17 @@ module ConsoleThinkTwice
   CASCADING_STRATEGIES = %i[destroy destroy_async delete_all].freeze
   SUPPRESSION_KEY = :console_think_twice_suppressed
 
+  # Source files belonging to Rails itself. Matched on the path rather than resolved from
+  # Gem.loaded_specs so that a vendored or git-checkout Rails is recognised too.
+  RAILS_SOURCE = %r{/active_(?:record|support|model)/}
+
+  # The Active Record internals that destroy a record as one step of a larger operation:
+  # association bookkeeping, autosave, and nested attributes.
+  RAILS_INTERNAL_WORK = %r{/active_record/(?:associations/|autosave_association\.rb|nested_attributes\.rb)}
+
+  # This gem's own frames, skipped when looking for the caller of a guarded method.
+  GEM_SOURCE = __dir__
+
   class << self
     def configuration
       @configuration ||= Configuration.new
@@ -38,8 +50,11 @@ module ConsoleThinkTwice
 
       unless @installed
         ActiveRecord::Base.prepend(RecordGuard)
+        # CollectionProxy overrides destroy_all and delete_all rather than inheriting them,
+        # so guarding Relation alone would miss every has_many collection.
         ActiveRecord::Relation.prepend(RelationGuard)
         ActiveRecord::Associations::CollectionProxy.prepend(RelationGuard)
+        ActiveRecord::Associations::CollectionProxy.prepend(CollectionGuard)
         @installed = true
       end
 
@@ -52,23 +67,72 @@ module ConsoleThinkTwice
       @active = false
     end
 
+    def enable!
+      @active = true
+    end
+
     def active?
-      !!@active
+      !!@active && configuration.enabled?
     end
 
     # Confirms the call, then runs it with nested prompts suppressed so that a `dependent:`
     # cascade, or a relation destroying its records one by one, only ever asks once.
-    def guard(target, action:, force:)
+    #
+    # `count` is passed when the caller already knows how many records are involved, which
+    # saves a COUNT and is the only way to size a call like `books.destroy(a, b)` that names
+    # its records rather than describing them.
+    def guard(target, action:, force:, count: nil)
       return yield if !active? || suppressed?
 
-      count = affected_count(target)
-      return yield if count.zero?
+      # Active Record's own work is confirmed by whatever the user typed to set it off, so it
+      # runs suppressed rather than merely unguarded: `destroy!` re-enters as `destroy`, and
+      # that second hop is dispatched from persistence.rb, where nothing marks it as internal.
+      return suppressed { yield } if nested_in_active_record?(target)
 
-      confirm!(target, action, count) unless force
+      unless force
+        count ||= affected_count(target)
+        return yield if count.zero?
+
+        confirm!(target, action, count)
+      end
+
       suppressed { yield }
     end
 
     private
+
+    # True when Active Record itself made this call as one step of an operation already under
+    # way: a record being removed by `accepts_nested_attributes_for`, a `has_one` being
+    # replaced, a collection destroying the records it was handed. Those run inside the
+    # enclosing call's transaction, so prompting would hold that transaction — and its locks —
+    # open until somebody answers, and would ask about a record the user never named.
+    #
+    # Both conditions are required, because neither separates the two cases alone. A destroy
+    # typed inside `transaction { ... }`, or into a `--sandbox` console, has a transaction open
+    # but is still the user's own call; and `Model.destroy_all` is dispatched from inside
+    # Active Record, but only through the delegation in querying.rb rather than through the
+    # association and autosave code that does this work.
+    def nested_in_active_record?(target)
+      return false unless open_transaction?(target)
+
+      dispatch_chain.any? { |path| RAILS_INTERNAL_WORK.match?(path) }
+    end
+
+    # The frames Active Record itself put between the caller and us: everything above the first
+    # frame that belongs to neither this gem nor Rails, which is the code that made the call.
+    # An unrecognisable frame ends the chain, so anything we cannot read is treated as the
+    # caller's own and asked about rather than skipped.
+    def dispatch_chain
+      frames = (caller_locations(1, 50) || []).map { |location| location.path.to_s }
+      frames.drop_while { |path| path.start_with?(GEM_SOURCE) }
+        .take_while { |path| RAILS_SOURCE.match?(path) }
+    end
+
+    def open_transaction?(target)
+      model_of(target).connection.open_transactions > 0
+    rescue
+      false
+    end
 
     def confirm!(target, action, count)
       summary = summarize(target, action, count)
@@ -100,7 +164,9 @@ module ConsoleThinkTwice
         "#{count} #{(count == 1) ? model : model.pluralize}"
       end
 
-      ["This will #{verb} #{subject}", configuration.label && " in #{configuration.label}", "."].compact.join
+      label = configuration.label
+      where = (label && !label.to_s.empty?) ? " in #{label}" : ""
+      "This will #{verb} #{subject}#{where}."
     end
 
     def affected_count(target)
@@ -119,16 +185,18 @@ module ConsoleThinkTwice
         .map(&:name)
     end
 
+    # Thread-local rather than fiber-local (which is what Thread.current[] gives), so that a
+    # confirmed call still counts as confirmed inside an Enumerator or any other fiber.
     def suppressed?
-      Thread.current[SUPPRESSION_KEY]
+      Thread.current.thread_variable_get(SUPPRESSION_KEY)
     end
 
     def suppressed
-      previous = Thread.current[SUPPRESSION_KEY]
-      Thread.current[SUPPRESSION_KEY] = true
+      previous = Thread.current.thread_variable_get(SUPPRESSION_KEY)
+      Thread.current.thread_variable_set(SUPPRESSION_KEY, true)
       yield
     ensure
-      Thread.current[SUPPRESSION_KEY] = previous
+      Thread.current.thread_variable_set(SUPPRESSION_KEY, previous)
     end
 
     def announce

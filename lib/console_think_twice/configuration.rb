@@ -35,9 +35,11 @@ module ConsoleThinkTwice
       input.respond_to?(:tty?) && input.tty?
     end
 
-    # Shown in the prompt to make the stakes obvious, e.g. "in production".
+    # Shown in the prompt to make the stakes obvious, e.g. "in production". Defaults to the
+    # Rails environment; assigning any value at all — nil and false included — wins over that,
+    # so the label can be turned off as well as changed.
     def label
-      return @label unless @label.nil?
+      return @label if defined?(@label)
 
       ::Rails.env.to_s if defined?(::Rails) && ::Rails.respond_to?(:env)
     end

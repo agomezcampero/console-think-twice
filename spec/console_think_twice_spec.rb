@@ -119,6 +119,63 @@ RSpec.describe ConsoleThinkTwice do
 
       expect(prompts).to eq(0)
     end
+
+    it "asks once for a collection destroying the records it was handed" do
+      first = author.books.create!(title: "A Wizard of Earthsea")
+      second = author.books.create!(title: "The Dispossessed")
+
+      expect { author.books.destroy(first, second) }.to change(Book, :count).by(-2)
+      expect(output.string).to include("This will permanently destroy 2 Books.")
+      expect(prompts).to eq(1)
+    end
+  end
+
+  # Active Record destroys records itself as one step of larger calls. Those are already
+  # covered by whatever the user typed to set them off, and they run inside that call's
+  # transaction, where stopping to ask would hold the transaction open until somebody answers.
+  describe "work Active Record does on its own" do
+    def transaction_depth
+      ActiveRecord::Base.connection.open_transactions
+    end
+
+    it "does not ask about a record removed through nested attributes" do
+      book = author.books.create!(title: "A Wizard of Earthsea")
+
+      expect { author.update!(books_attributes: [{id: book.id, _destroy: "1"}]) }
+        .to change(Book, :count).by(-1)
+      expect(prompts).to eq(0)
+    end
+
+    it "does not ask about the record a has_one replacement discards" do
+      publisher = Publisher.create!(name: "Gollancz")
+      publisher.create_logo!(url: "old.png")
+
+      expect { publisher.logo = Logo.new(url: "new.png") }.not_to change(Logo, :count)
+      expect(prompts).to eq(0)
+    end
+
+    it "asks before opening a transaction, never from inside one" do
+      depth_at_prompt = nil
+      allow(input).to receive(:gets) do
+        depth_at_prompt = transaction_depth
+        "y\n"
+      end
+
+      expect { author.destroy! }.to change(Author, :count).by(-1)
+      expect(depth_at_prompt).to eq(transaction_depth)
+    end
+
+    it "still asks inside a transaction the caller opened" do
+      ActiveRecord::Base.transaction { Author.destroy_all }
+
+      expect(prompts).to eq(1)
+    end
+
+    it "keeps a confirmed call confirmed inside a fiber" do
+      described_class.send(:suppressed) do
+        expect(Fiber.new { described_class.send(:suppressed?) }.resume).to be(true)
+      end
+    end
   end
 
   describe "the environment label" do
@@ -128,6 +185,14 @@ RSpec.describe ConsoleThinkTwice do
       author.destroy!
 
       expect(output.string).to include("This will permanently destroy Author ##{author.id} in production.")
+    end
+
+    it "leaves it out when set to something blank rather than printing it" do
+      described_class.configure { |config| config.label = false }
+
+      author.destroy!
+
+      expect(output.string).to include("This will permanently destroy Author ##{author.id}.")
     end
   end
 
@@ -153,6 +218,24 @@ RSpec.describe ConsoleThinkTwice do
     end
   end
 
+  describe "a forced call" do
+    it "does not count what it is not going to ask about" do
+      counts = []
+      subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+        counts << payload[:sql] if payload[:sql].to_s.include?("SELECT COUNT")
+      end
+
+      begin
+        Author.destroy_all(force: true)
+      ensure
+        ActiveSupport::Notifications.unsubscribe(subscriber)
+      end
+
+      expect(counts).to be_empty
+      expect(Author.count).to eq(0)
+    end
+  end
+
   describe ".install!" do
     it "does nothing when disabled by configuration" do
       described_class.disable!
@@ -164,6 +247,14 @@ RSpec.describe ConsoleThinkTwice do
   end
 
   describe "configuration" do
+    it "stops guarding as soon as it is disabled, without reinstalling" do
+      described_class.configure { |config| config.enabled = false }
+
+      expect { Author.destroy_all }.to change(Author, :count).to(0)
+      expect(described_class).not_to be_active
+      expect(prompts).to eq(0)
+    end
+
     it "reads the opt-out from the environment" do
       config = described_class::Configuration.new
       expect(config.enabled?).to be(true)

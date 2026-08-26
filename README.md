@@ -54,6 +54,7 @@ Outside Rails, call `ConsoleThinkTwice.install!` once your models are loaded.
 | `record.delete` | `This will permanently delete, skipping callbacks, User #1.` |
 | `Model.destroy_all`, `relation.destroy_all`, `company.users.destroy_all` | `This will permanently destroy 200 Users.` |
 | `Model.delete_all`, `relation.delete_all` | `This will permanently delete, skipping callbacks, 200 Users.` |
+| `company.users.destroy(user, other)` | `This will permanently destroy 2 Users.` |
 
 `Model.destroy(id)`, `destroy_by` and `delete_by` route through those methods, so they are
 covered too.
@@ -69,6 +70,20 @@ A `dependent: :destroy` cascade destroys child records, and `destroy_all` destro
 records one at a time — both would otherwise prompt again for every record. Nested prompts
 are suppressed for the duration of a confirmed call, so you are asked exactly once.
 
+### What is not guarded
+
+`update_all`, `upsert_all` and anything run through `connection.execute` are untouched, as is
+`collection.delete(record)` — which unlinks the record rather than destroying it, unless the
+association says `dependent: :destroy`.
+
+Active Record also destroys records itself, as one step of a call that is about something
+else: a record marked `_destroy` by `accepts_nested_attributes_for`, or the old record a
+`has_one` assignment discards. Those do not prompt. They are already covered by whatever you
+typed to set them off, and they run inside that call's transaction — stopping to ask there
+would hold the transaction, and its locks, open until somebody answered. A destroy you type
+yourself is always asked about, including inside `transaction { ... }` and in a
+`rails console --sandbox`.
+
 ### Nobody to ask
 
 When the input stream is not a terminal — piped input, a script fed to `rails console` —
@@ -80,7 +95,8 @@ there is no one to answer, so the guard refuses the call instead of assuming yes
 ```ruby
 ConsoleThinkTwice.configure do |config|
   config.enabled = Rails.env.production?      # default: true, unless CONSOLE_THINK_TWICE is 0/false/no/off
-  config.label = "production (europe)"        # shown in the prompt; defaults to Rails.env
+  config.label = "production (europe)"        # shown in the prompt; defaults to Rails.env,
+                                              # set nil or false to leave it out
   config.affirmative_answers = %w[y yes si]   # default: %w[y yes]
   config.interactive = true                   # default: auto-detected from config.input.tty?
   config.input = $stdin
@@ -89,7 +105,9 @@ end
 ```
 
 Set `CONSOLE_THINK_TWICE=0` in the environment to turn the guard off without touching
-code. `ConsoleThinkTwice.disable!` turns it off for the rest of the current session.
+code. `ConsoleThinkTwice.disable!` turns it off for the rest of the current session and
+`ConsoleThinkTwice.enable!` turns it back on; setting `config.enabled` takes effect straight
+away too, without reinstalling.
 
 ## Development
 
@@ -98,6 +116,13 @@ bundle install
 bundle exec rake        # specs and linter
 bundle exec rspec
 bundle exec standardrb
+```
+
+The guard reads Active Record's own call stack to tell your calls from its, so the suite is
+run against every supported Active Record, not just the newest. Delete `Gemfile.lock`, then:
+
+```bash
+ACTIVERECORD_VERSION=7.0 bundle install && ACTIVERECORD_VERSION=7.0 bundle exec rspec
 ```
 
 ## License
