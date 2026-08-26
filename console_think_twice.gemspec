@@ -6,7 +6,7 @@ Gem::Specification.new do |spec|
   spec.name = "console_think_twice"
   spec.version = ConsoleThinkTwice::VERSION
   spec.authors = ["Agustin Gomez"]
-  spec.email = ["57372662+agomezcampero@users.noreply.github.com"]
+  spec.email = ["agustin@gomezcampero.com"]
 
   spec.summary = "Ask for confirmation before destructive Active Record calls in a console."
   spec.description = "Prompts before destroy, destroy!, delete, destroy_all and delete_all when they are " \
