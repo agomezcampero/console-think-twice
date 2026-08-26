@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Active Record's own destroys no longer prompt. A record marked `_destroy` by
+  `accepts_nested_attributes_for`, and the record a `has_one` assignment discards, were
+  asked about as though they had been typed — and asked from inside the enclosing call's
+  transaction, holding it and its locks open until somebody answered. Calls you type are
+  still guarded, including inside `transaction { ... }` and in a `--sandbox` console.
+- `collection.destroy(record, other)` asks once for the whole call rather than once per
+  record, and asks before the transaction is opened rather than inside it.
+- A blank `config.label` is left out of the prompt instead of printed. `false` rendered as
+  `"... Author #1false."`, and there was no way to turn the label off under Rails, where an
+  unset label falls back to `Rails.env`.
+- `config.enabled` takes effect when it changes, rather than only at `install!` time.
+- A forced call no longer counts the records it was told not to ask about, so
+  `destroy_all(force: true)` on a large table skips a needless `SELECT COUNT(*)`.
+- A confirmed call stays confirmed inside a fiber. Suppression used `Thread.current[]`,
+  which is fiber-local, so a destroy reached through an Enumerator prompted again.
+
+### Added
+
+- `ConsoleThinkTwice.enable!`, the counterpart to `disable!`.
+- CI runs the suite against every supported Active Record, not only the newest.
+
 ## [0.1.0]
 
 Initial release.
