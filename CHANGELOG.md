@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-26
+
 ### Fixed
 
 - Active Record's own destroys no longer prompt. A record marked `_destroy` by
@@ -20,12 +22,19 @@
 - A confirmed call stays confirmed inside a fiber. Suppression used `Thread.current[]`,
   which is fiber-local, so a destroy reached through an Enumerator prompted again.
 
+### Changed
+
+- `collection.delete(record)` is no longer guarded. It was only ever caught in passing, by
+  the guard on the record destroy underneath it, and what it means depends on the
+  association: without `dependent: :destroy` it unlinks the record rather than destroying
+  it, so the prompt could describe a permanent delete that was not one.
+
 ### Added
 
 - `ConsoleThinkTwice.enable!`, the counterpart to `disable!`.
 - CI runs the suite against every supported Active Record, not only the newest.
 
-## [0.1.0]
+## [0.1.0] - 2026-08-26
 
 Initial release.
 
@@ -40,5 +49,6 @@ Initial release.
 - Non-interactive input refuses rather than assuming yes.
 - Configurable via `ConsoleThinkTwice.configure`, or turned off with `CONSOLE_THINK_TWICE=0`.
 
-[Unreleased]: https://github.com/agomezcampero/console-think-twice/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/agomezcampero/console-think-twice/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/agomezcampero/console-think-twice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/agomezcampero/console-think-twice/releases/tag/v0.1.0
