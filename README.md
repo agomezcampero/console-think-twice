@@ -1,5 +1,6 @@
 # console_think_twice
 
+[![Gem Version](https://badge.fury.io/rb/console_think_twice.svg)](https://rubygems.org/gems/console_think_twice)
 [![CI](https://github.com/agomezcampero/console-think-twice/actions/workflows/ci.yml/badge.svg)](https://github.com/agomezcampero/console-think-twice/actions/workflows/ci.yml)
 
 Confirm before you destroy. `console_think_twice` intercepts destructive Active Record
@@ -27,14 +28,16 @@ Confirm? (y/N) y
 
 ## Installation
 
+Add it to your Gemfile:
+
 ```ruby
 gem "console_think_twice"
 ```
 
-Not on RubyGems yet — until it is, point at the repository:
+Then `bundle install`. Or:
 
-```ruby
-gem "console_think_twice", github: "agomezcampero/console-think-twice"
+```bash
+bundle add console_think_twice
 ```
 
 In a Rails app that is all — a railtie installs the guard from the `console` hook, which
