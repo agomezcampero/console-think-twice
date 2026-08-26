@@ -67,7 +67,7 @@ RSpec.describe ConsoleThinkTwice do
     it "lists the associations that will cascade" do
       author.destroy!
 
-      expect(output.string).to include("Cascades to: books.")
+      expect(output.string).to include("Cascades to: books\n")
     end
 
     it "asks once for the whole cascade, not once per dependent record" do

@@ -12,7 +12,7 @@ require_relative "console_think_twice/relation_guard"
 #
 #   >> User.first.destroy!
 #   This will permanently destroy User #1 in production.
-#   Cascades to: sessions, company_memberships, comments, api_keys.
+#   Cascades to: sessions, company_memberships, comments, api_keys
 #   Confirm? (y/N)
 #
 # Every guarded call takes `force: true` to skip the prompt. In a Rails app the railtie
@@ -80,7 +80,7 @@ module ConsoleThinkTwice
       output.puts
       output.puts highlight(summary)
       cascades = cascading_associations(model_of(target))
-      output.puts "Cascades to: #{cascades.join(", ")}." if cascades.any?
+      output.puts "Cascades to: #{cascades.join(", ")}" if cascades.any?
       output.print "Confirm? (y/N) "
       output.flush
 
