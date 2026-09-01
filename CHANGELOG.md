@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- `config.ignored_classes` leaves the classes you name unguarded, for tables that are
+  cleared as a matter of routine — `SolidCache::Entry`, say. Takes names or classes,
+  covers subclasses, and compares names rather than resolving them, so a class that is not
+  loaded, or not in this app at all, can be listed.
+
 ## [0.2.0] - 2026-08-26
 
 ### Fixed

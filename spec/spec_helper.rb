@@ -14,6 +14,7 @@ ActiveRecord::Schema.define do
   create_table :books, force: true do |t|
     t.integer :author_id
     t.string :title
+    t.string :type
   end
 
   create_table :publishers, force: true do |t|
@@ -33,6 +34,10 @@ end
 
 class Book < ActiveRecord::Base
   belongs_to :author, optional: true
+end
+
+# Single-table inheritance, so that ignoring a class can be shown to cover what inherits it.
+class Comic < Book
 end
 
 # Kept apart from Author so that the cascade listing there stays about books alone.

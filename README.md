@@ -76,6 +76,8 @@ are suppressed for the duration of a confirmed call, so you are asked exactly on
 `collection.delete(record)` — which unlinks the record rather than destroying it, unless the
 association says `dependent: :destroy`.
 
+Classes listed in `config.ignored_classes` are not guarded either — see below.
+
 Active Record also destroys records itself, as one step of a call that is about something
 else: a record marked `_destroy` by `accepts_nested_attributes_for`, or the old record a
 `has_one` assignment discards. Those do not prompt. They are already covered by whatever you
@@ -97,12 +99,27 @@ ConsoleThinkTwice.configure do |config|
   config.enabled = Rails.env.production?      # default: true, unless CONSOLE_THINK_TWICE is 0/false/no/off
   config.label = "production (europe)"        # shown in the prompt; defaults to Rails.env,
                                               # set nil or false to leave it out
+  config.ignored_classes = %w[SolidCache::Entry]  # left unguarded; default: none
   config.affirmative_answers = %w[y yes si]   # default: %w[y yes]
   config.interactive = true                   # default: auto-detected from config.input.tty?
   config.input = $stdin
   config.output = $stdout
 end
 ```
+
+### Classes to leave alone
+
+Some tables are cleared as a matter of routine — job records, cache entries, whatever your
+app treats as scratch. Being asked about those is noise, and noise teaches you to answer `y`
+without reading. List them and the guard stays out of the way:
+
+```ruby
+config.ignored_classes = %w[SolidCache::Entry SolidQueue::Job]
+```
+
+Classes work as well as names, and a subclass of a listed class is ignored too. Names are
+compared rather than resolved, so listing a class that this app does not have, or has not
+autoloaded yet, is fine.
 
 Set `CONSOLE_THINK_TWICE=0` in the environment to turn the guard off without touching
 code. `ConsoleThinkTwice.disable!` turns it off for the rest of the current session and
