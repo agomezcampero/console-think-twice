@@ -82,7 +82,7 @@ module ConsoleThinkTwice
     # saves a COUNT and is the only way to size a call like `books.destroy(a, b)` that names
     # its records rather than describing them.
     def guard(target, action:, force:, count: nil)
-      return yield if !active? || suppressed?
+      return yield if !active? || suppressed? || ignored?(target)
 
       # Active Record's own work is confirmed by whatever the user typed to set it off, so it
       # runs suppressed rather than merely unguarded: `destroy!` re-enters as `destroy`, and
@@ -100,6 +100,10 @@ module ConsoleThinkTwice
     end
 
     private
+
+    def ignored?(target)
+      configuration.ignores?(model_of(target))
+    end
 
     # True when Active Record itself made this call as one step of an operation already under
     # way: a record being removed by `accepts_nested_attributes_for`, a `has_one` being

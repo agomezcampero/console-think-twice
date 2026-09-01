@@ -12,6 +12,7 @@ RSpec.describe ConsoleThinkTwice do
       config.output = output
       config.interactive = true
       config.label = nil
+      config.ignored_classes = []
     end
     described_class.install!
     answer "y"
@@ -193,6 +194,52 @@ RSpec.describe ConsoleThinkTwice do
       author.destroy!
 
       expect(output.string).to include("This will permanently destroy Author ##{author.id}.")
+    end
+  end
+
+  describe "ignored classes" do
+    it "destroys a listed class without asking" do
+      described_class.configure { |config| config.ignored_classes = %w[Author] }
+
+      expect { author.destroy! }.to change(Author, :count).by(-1)
+      expect(prompts).to eq(0)
+    end
+
+    it "takes classes as well as names" do
+      described_class.configure { |config| config.ignored_classes = [Author] }
+
+      expect { Author.destroy_all }.to change(Author, :count).to(0)
+      expect(prompts).to eq(0)
+    end
+
+    it "covers relations and collections, not only records" do
+      author.books.create!(title: "A Wizard of Earthsea")
+      described_class.configure { |config| config.ignored_classes = %w[Book] }
+
+      expect { author.books.delete_all }.to change(Book, :count).by(-1)
+      expect(prompts).to eq(0)
+    end
+
+    it "covers what inherits from a listed class" do
+      comic = Comic.create!(title: "Watchmen")
+      described_class.configure { |config| config.ignored_classes = %w[Book] }
+
+      expect { comic.destroy! }.to change(Comic, :count).by(-1)
+      expect(prompts).to eq(0)
+    end
+
+    it "keeps asking about everything else" do
+      described_class.configure { |config| config.ignored_classes = %w[Book] }
+      answer "n"
+
+      expect { author.destroy! }.to raise_error(described_class::Aborted)
+    end
+
+    it "takes a name that is not loaded, or not an application class at all" do
+      described_class.configure { |config| config.ignored_classes = %w[SolidCache::Entry] }
+
+      expect { author.destroy! }.to change(Author, :count).by(-1)
+      expect(prompts).to eq(1)
     end
   end
 
